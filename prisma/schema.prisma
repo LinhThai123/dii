@@ -1,0 +1,530 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum AuthProvider {
+  PHONE
+  GOOGLE
+  FACEBOOK
+  APPLE
+}
+
+enum OtpPurpose {
+  LOGIN
+  REGISTER
+  LINK_ACCOUNT
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum CoupleStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+}
+
+enum RelationshipStatus {
+  DATING
+  ENGAGED
+  MARRIED
+}
+
+enum DatePlanStatus {
+  PLANNED
+  COMPLETED
+  CANCELLED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+}
+
+enum NotificationType {
+  DATE_REMINDER
+  COUPLE_LINK
+  MESSAGE
+  SYSTEM
+}
+
+enum SettingValueType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+}
+
+// ─── Mobile Identity ─────────────────────────────────────────────────────────
+
+model User {
+  id          String     @id @default(cuid())
+  email       String?    @unique
+  phone       String?    @unique
+  name        String?
+  avatar      String?
+  bio         String?
+  dateOfBirth DateTime?  @map("date_of_birth")
+  gender      Gender?
+  status      UserStatus @default(ACTIVE)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  authAccounts   AuthAccount[]
+  preferences    UserPreference?
+  refreshTokens  RefreshToken[]
+  coupleMembers  CoupleMember[]
+  memories       Memory[]
+  messages       Message[]
+  photos         Photo[]
+  reviews        Review[]
+  notifications  Notification[]
+  datePlans      DatePlan[]      @relation("DatePlanCreator")
+  checklistItems ChecklistItem[] @relation("ChecklistAssignee")
+
+  @@index([status])
+  @@map("users")
+}
+
+model AuthAccount {
+  id                String       @id @default(cuid())
+  userId            String       @map("user_id")
+  provider          AuthProvider
+  providerAccountId String       @map("provider_account_id")
+  passwordHash      String?      @map("password_hash")
+  accessToken       String?      @map("access_token") @db.Text
+  refreshToken      String?      @map("refresh_token") @db.Text
+  tokenExpiresAt    DateTime?    @map("token_expires_at")
+  metadata          Json?
+  isVerified        Boolean      @default(false) @map("is_verified")
+  lastUsedAt        DateTime?    @map("last_used_at")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("auth_accounts")
+}
+
+model OtpCode {
+  id        String     @id @default(cuid())
+  phone     String
+  codeHash  String     @map("code_hash")
+  purpose   OtpPurpose @default(LOGIN)
+  attempts  Int        @default(0)
+  expiresAt DateTime   @map("expires_at")
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  @@index([phone, purpose])
+  @@index([expiresAt])
+  @@map("otp_codes")
+}
+
+model UserPreference {
+  id                   String   @id @default(cuid())
+  userId               String   @unique @map("user_id")
+  cuisines             Json?
+  activities           Json?
+  budgetRange          String?  @map("budget_range")
+  distanceRadius       Int?     @map("distance_radius")
+  notificationsEnabled Boolean  @default(true) @map("notifications_enabled")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// ─── Admin Identity & RBAC ───────────────────────────────────────────────────
+
+model AdminUser {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String    @map("password_hash")
+  name            String
+  isActive        Boolean   @default(true) @map("is_active")
+  twoFactorSecret String?   @map("two_factor_secret")
+  lastLoginAt     DateTime? @map("last_login_at")
+  lastLoginIp     String?   @map("last_login_ip")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  roles                 AdminUserRole[]
+  refreshTokens         AdminRefreshToken[]
+  auditLogs             AdminAuditLog[]
+  systemSettingsUpdated SystemSetting[]     @relation("SettingUpdatedBy")
+
+  @@map("admin_users")
+}
+
+model AdminRole {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users       AdminUserRole[]
+  permissions AdminRolePermission[]
+
+  @@map("admin_roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  module      String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  roles AdminRolePermission[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+model AdminRolePermission {
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  role       AdminRole  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("admin_role_permissions")
+}
+
+model AdminUserRole {
+  adminId String @map("admin_id")
+  roleId  String @map("role_id")
+
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  role  AdminRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([adminId, roleId])
+  @@map("admin_user_roles")
+}
+
+model AdminRefreshToken {
+  id        String   @id @default(cuid())
+  adminId   String   @map("admin_id")
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([expiresAt])
+  @@map("admin_refresh_tokens")
+}
+
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  adminId    String   @map("admin_id")
+  action     String
+  targetType String?  @map("target_type")
+  targetId   String?  @map("target_id")
+  metadata   Json?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("admin_audit_logs")
+}
+
+model SystemSetting {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  value       String           @db.Text
+  valueType   SettingValueType @map("value_type")
+  category    String
+  label       String
+  description String?
+  isPublic    Boolean          @default(false) @map("is_public")
+  isEditable  Boolean          @default(true) @map("is_editable")
+  isSystem    Boolean          @default(false) @map("is_system")
+  updatedById String?          @map("updated_by_id")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  updatedBy AdminUser? @relation("SettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([category])
+  @@map("system_settings")
+}
+
+// ─── Couple ──────────────────────────────────────────────────────────────────
+
+model Couple {
+  id                 String             @id @default(cuid())
+  inviteCode         String             @unique @map("invite_code")
+  status             CoupleStatus       @default(PENDING)
+  anniversaryDate    DateTime?          @map("anniversary_date")
+  relationshipStatus RelationshipStatus @default(DATING) @map("relationship_status")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  members   CoupleMember[]
+  datePlans DatePlan[]
+  memories  Memory[]
+  albums    Album[]
+  messages  Message[]
+  favorites Favorite[]
+  reviews   Review[]
+
+  @@map("couples")
+}
+
+model CoupleMember {
+  id       String   @id @default(cuid())
+  coupleId String   @map("couple_id")
+  userId   String   @map("user_id")
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([coupleId, userId])
+  @@map("couple_members")
+}
+
+// ─── Places & Planning ───────────────────────────────────────────────────────
+
+model Place {
+  id            String   @id @default(cuid())
+  googlePlaceId String?  @unique @map("google_place_id")
+  name          String
+  address       String?
+  latitude      Float?
+  longitude     Float?
+  rating        Float?
+  reviewCount   Int      @default(0) @map("review_count")
+  category      String?
+  priceLevel    Int?     @map("price_level")
+  openingHours  Json?    @map("opening_hours")
+  photos        Json?
+  phone         String?
+  website       String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  datePlans DatePlan[]
+  memories  Memory[]
+  favorites Favorite[]
+  reviews   Review[]
+
+  @@index([category])
+  @@index([rating])
+  @@map("places")
+}
+
+model DatePlan {
+  id              String         @id @default(cuid())
+  coupleId        String         @map("couple_id")
+  createdById     String         @map("created_by_id")
+  title           String
+  description     String?
+  scheduledAt     DateTime       @map("scheduled_at")
+  durationMinutes Int?           @map("duration_minutes")
+  placeId         String?        @map("place_id")
+  budget          Decimal?       @db.Decimal(10, 2)
+  status          DatePlanStatus @default(PLANNED)
+  notes           String?
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  couple         Couple          @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  createdBy      User            @relation("DatePlanCreator", fields: [createdById], references: [id])
+  place          Place?          @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  checklistItems ChecklistItem[]
+  memories       Memory[]
+
+  @@index([coupleId])
+  @@index([scheduledAt])
+  @@index([status])
+  @@map("date_plans")
+}
+
+model ChecklistItem {
+  id           String   @id @default(cuid())
+  datePlanId   String   @map("date_plan_id")
+  title        String
+  isCompleted  Boolean  @default(false) @map("is_completed")
+  assignedToId String?  @map("assigned_to_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  datePlan   DatePlan @relation(fields: [datePlanId], references: [id], onDelete: Cascade)
+  assignedTo User?    @relation("ChecklistAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([datePlanId])
+  @@map("checklist_items")
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  coupleId  String   @map("couple_id")
+  placeId   String   @map("place_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  place  Place  @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  @@unique([coupleId, placeId])
+  @@map("favorites")
+}
+
+// ─── Memories & Media ────────────────────────────────────────────────────────
+
+model Memory {
+  id         String   @id @default(cuid())
+  coupleId   String   @map("couple_id")
+  authorId   String   @map("author_id")
+  datePlanId String?  @map("date_plan_id")
+  placeId    String?  @map("place_id")
+  title      String
+  content    String?
+  memoryAt   DateTime @default(now()) @map("memory_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  couple   Couple    @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  datePlan DatePlan? @relation(fields: [datePlanId], references: [id], onDelete: SetNull)
+  place    Place?    @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  photos   Photo[]
+
+  @@index([coupleId])
+  @@index([memoryAt])
+  @@map("memories")
+}
+
+model Album {
+  id        String   @id @default(cuid())
+  coupleId  String   @map("couple_id")
+  title     String
+  coverUrl  String?  @map("cover_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  couple Couple  @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  photos Photo[]
+
+  @@index([coupleId])
+  @@map("albums")
+}
+
+model Photo {
+  id           String   @id @default(cuid())
+  memoryId     String?  @map("memory_id")
+  albumId      String?  @map("album_id")
+  uploadedById String   @map("uploaded_by_id")
+  s3Url        String   @map("s3_url")
+  caption      String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  memory     Memory? @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  album      Album?  @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  uploadedBy User    @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([memoryId])
+  @@index([albumId])
+  @@map("photos")
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  placeId   String   @map("place_id")
+  userId    String   @map("user_id")
+  coupleId  String?  @map("couple_id")
+  rating    Int
+  text      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  place  Place   @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  couple Couple? @relation(fields: [coupleId], references: [id], onDelete: SetNull)
+
+  @@index([placeId])
+  @@index([userId])
+  @@map("reviews")
+}
+
+// ─── Communication ───────────────────────────────────────────────────────────
+
+model Message {
+  id        String      @id @default(cuid())
+  coupleId  String      @map("couple_id")
+  senderId  String      @map("sender_id")
+  type      MessageType @default(TEXT)
+  content   String
+  readAt    DateTime?   @map("read_at")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  sender User   @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([coupleId])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  body      String
+  isRead    Boolean          @default(false) @map("is_read")
+  metadata  Json?
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
