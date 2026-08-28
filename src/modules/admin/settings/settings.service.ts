@@ -8,6 +8,11 @@ import {
 } from '../../../common/exceptions';
 import { AdminAuditService } from '../shared/admin-audit.service';
 import { CreateSettingDto, UpdateSettingDto } from './dto/settings.dto';
+import { BulkSettingsDto } from './dto/bulk-settings.dto';
+import {
+  PLATFORM_SETTINGS_BY_KEY,
+  PLATFORM_SETTINGS_MANIFEST,
+} from './settings-manifest';
 import { SettingsRepository } from './settings.repository';
 
 @Injectable()
@@ -132,6 +137,71 @@ export class SettingsService {
     });
 
     return { message: `Setting "${key}" deleted` };
+  }
+
+  async getPlatformBundle() {
+    const keys = PLATFORM_SETTINGS_MANIFEST.map((item) => item.key);
+    const stored = await this.settingsRepository.findByKeys(keys);
+    const storedMap = new Map(stored.map((item) => [item.key, item.value]));
+
+    const values: Record<string, string> = {};
+    for (const definition of PLATFORM_SETTINGS_MANIFEST) {
+      values[definition.key] = storedMap.get(definition.key) ?? definition.value;
+    }
+
+    return { values };
+  }
+
+  async savePlatformBundle(
+    dto: BulkSettingsDto,
+    adminId: string,
+    ipAddress?: string,
+  ) {
+    const updatedKeys: string[] = [];
+
+    for (const [key, value] of Object.entries(dto.values)) {
+      const definition = PLATFORM_SETTINGS_BY_KEY[key];
+      if (!definition) continue;
+
+      this.validateValue(value, definition.valueType);
+
+      const existing = await this.settingsRepository.findByKey(key);
+      if (existing) {
+        if (!existing.isEditable) continue;
+        await this.settingsRepository.update(key, {
+          value,
+          updatedById: adminId,
+        });
+      } else {
+        await this.settingsRepository.create({
+          key: definition.key,
+          value,
+          valueType: definition.valueType,
+          category: definition.category,
+          label: definition.label,
+          description: definition.description,
+          isPublic: definition.isPublic ?? false,
+          isEditable: true,
+          isSystem: false,
+          updatedById: adminId,
+        });
+      }
+
+      updatedKeys.push(key);
+    }
+
+    if (updatedKeys.length > 0) {
+      await this.auditService.log({
+        adminId,
+        action: 'settings.bulk_update',
+        targetType: 'system_setting',
+        targetId: 'platform_bundle',
+        metadata: { keys: updatedKeys },
+        ipAddress,
+      });
+    }
+
+    return this.getPlatformBundle();
   }
 
   private validateValue(value: string, valueType: SettingValueType) {

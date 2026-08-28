@@ -1,5 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { seedDemoUsers } from './seed-demo-users';
+import { seedDemoBusiness } from './seed-demo-business';
+import { seedVnAdminDivisions } from './seed-vn-admin';
 
 const prisma = new PrismaClient();
 
@@ -8,9 +11,19 @@ const PERMISSIONS = [
   { code: 'users.read', module: 'users', description: 'View users' },
   { code: 'users.suspend', module: 'users', description: 'Suspend users' },
   { code: 'couples.read', module: 'couples', description: 'View couples' },
+  { code: 'couples.write', module: 'couples', description: 'Update couple status' },
   { code: 'couples.delete', module: 'couples', description: 'Delete couples' },
   { code: 'places.read', module: 'places', description: 'View places' },
   { code: 'places.write', module: 'places', description: 'Manage places' },
+  { code: 'places.delete', module: 'places', description: 'Delete places' },
+  { code: 'dates.read', module: 'dates', description: 'View date plans' },
+  { code: 'dates.delete', module: 'dates', description: 'Delete date plans' },
+  { code: 'memories.read', module: 'memories', description: 'View memories' },
+  { code: 'memories.delete', module: 'memories', description: 'Delete memories' },
+  { code: 'media.read', module: 'media', description: 'View albums and photos' },
+  { code: 'media.delete', module: 'media', description: 'Delete albums and photos' },
+  { code: 'reviews.read', module: 'reviews', description: 'View reviews' },
+  { code: 'reviews.delete', module: 'reviews', description: 'Delete reviews' },
   { code: 'analytics.read', module: 'analytics', description: 'View analytics' },
   { code: 'audit.read', module: 'audit', description: 'View audit logs' },
   { code: 'reports.read', module: 'reports', description: 'View reports' },
@@ -39,8 +52,19 @@ const ROLES = [
       'users.read',
       'users.suspend',
       'couples.read',
+      'couples.write',
       'couples.delete',
       'places.read',
+      'places.write',
+      'places.delete',
+      'dates.read',
+      'dates.delete',
+      'memories.read',
+      'memories.delete',
+      'media.read',
+      'media.delete',
+      'reviews.read',
+      'reviews.delete',
       'reports.read',
       'analytics.read',
       'audit.read',
@@ -225,6 +249,10 @@ async function main() {
   }
 
   console.log(`Seeded ${DEFAULT_SETTINGS.length} system settings`);
+
+  await seedDemoUsers(prisma);
+  await seedDemoBusiness(prisma);
+  await seedVnAdminDivisions(prisma);
 }
 
 main()

@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -17,6 +18,7 @@ import { RequirePermissions } from '../../../common/decorators/require-permissio
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import type { AdminAuthenticatedUser } from '../../../shared/interfaces/admin-jwt-payload.interface';
 import { CreateSettingDto, UpdateSettingDto } from './dto/settings.dto';
+import { BulkSettingsDto } from './dto/bulk-settings.dto';
 import { SettingsService } from './settings.service';
 
 @ApiTags('admin-settings')
@@ -38,6 +40,23 @@ export class SettingsController {
       parseInt(page, 10) || 1,
       parseInt(limit, 10) || 50,
     );
+  }
+
+  @Get('bundle/platform')
+  @RequirePermissions('settings.read')
+  getPlatformBundle() {
+    return this.settingsService.getPlatformBundle();
+  }
+
+  @Put('bundle/platform')
+  @RequirePermissions('settings.write')
+  savePlatformBundle(
+    @Body() dto: BulkSettingsDto,
+    @CurrentUser() admin: AdminAuthenticatedUser,
+    @Req() req: Request,
+  ) {
+    const ip = req.ip ?? req.socket.remoteAddress;
+    return this.settingsService.savePlatformBundle(dto, admin.id, ip);
   }
 
   @Get(':key')

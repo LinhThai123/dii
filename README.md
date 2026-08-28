@@ -44,6 +44,10 @@ POST /admin/v1/auth/refresh  { refreshToken }
 GET  /admin/v1/auth/me       (Bearer)
 GET  /admin/v1/dashboard/stats (Bearer, permission: analytics.read)
 GET  /admin/v1/users         (Bearer, permission: users.read)
+PATCH /admin/v1/users/:id/status (Bearer, permission: users.suspend)
+GET  /admin/v1/couples       (Bearer, permission: couples.read)
+PATCH /admin/v1/couples/:id/status (Bearer, permission: couples.write)
+DELETE /admin/v1/couples/:id (Bearer, permission: couples.delete)
 GET  /admin/v1/settings      (Bearer, permission: settings.read)
 POST /admin/v1/settings      (Bearer, permission: settings.write)
 

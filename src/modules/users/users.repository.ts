@@ -33,4 +33,15 @@ export class UsersRepository {
   findByPhone(phone: string) {
     return this.prisma.user.findUnique({ where: { phone } });
   }
+
+  updateProfile(
+    id: string,
+    data: { name?: string; bio?: string; avatar?: string },
+  ) {
+    return this.prisma.user.update({
+      where: { id },
+      data,
+      select: userPublicSelect,
+    });
+  }
 }

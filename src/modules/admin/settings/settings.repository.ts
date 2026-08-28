@@ -91,4 +91,11 @@ export class SettingsRepository {
       select: { key: true },
     });
   }
+
+  findByKeys(keys: string[]) {
+    return this.prisma.systemSetting.findMany({
+      where: { key: { in: keys } },
+      select: settingSelect,
+    });
+  }
 }

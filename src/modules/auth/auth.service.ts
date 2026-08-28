@@ -44,7 +44,7 @@ export class AuthService {
       throw new BadRequestException('Invalid phone number');
     }
 
-    const code = generateOtpCode();
+    const code = this.getDevOtpCode() ?? generateOtpCode();
     const codeHash = await hashOtp(code);
     const expiresAt = new Date(Date.now() + this.otpTtlMs);
 
@@ -65,26 +65,30 @@ export class AuthService {
 
   async verifyPhoneOtp(phone: string, code: string, name?: string) {
     const normalized = normalizePhone(phone);
-    const otp = await this.authRepository.findLatestOtp(
-      normalized,
-      OtpPurpose.LOGIN,
-    );
+    const devOtpAccepted = this.isDevOtpAccepted(code);
 
-    if (!otp) {
-      throw new UnauthorizedException('OTP expired or not found');
+    if (!devOtpAccepted) {
+      const otp = await this.authRepository.findLatestOtp(
+        normalized,
+        OtpPurpose.LOGIN,
+      );
+
+      if (!otp) {
+        throw new UnauthorizedException('OTP expired or not found');
+      }
+
+      if (otp.attempts >= this.maxOtpAttempts) {
+        throw new UnauthorizedException('Too many attempts');
+      }
+
+      const valid = await verifyOtp(code, otp.codeHash);
+      if (!valid) {
+        await this.authRepository.incrementOtpAttempts(otp.id);
+        throw new UnauthorizedException('Invalid OTP');
+      }
+
+      await this.authRepository.deleteOtp(otp.id);
     }
-
-    if (otp.attempts >= this.maxOtpAttempts) {
-      throw new UnauthorizedException('Too many attempts');
-    }
-
-    const valid = await verifyOtp(code, otp.codeHash);
-    if (!valid) {
-      await this.authRepository.incrementOtpAttempts(otp.id);
-      throw new UnauthorizedException('Invalid OTP');
-    }
-
-    await this.authRepository.deleteOtp(otp.id);
 
     let account = await this.authRepository.findAuthAccount(
       AuthProvider.PHONE,
@@ -141,21 +145,24 @@ export class AuthService {
 
   async linkPhone(user: MobileAuthenticatedUser, phone: string, code: string) {
     const normalized = normalizePhone(phone);
-    const otp = await this.authRepository.findLatestOtp(
-      normalized,
-      OtpPurpose.LINK_ACCOUNT,
-    );
 
-    if (!otp) {
-      throw new UnauthorizedException('OTP expired or not found');
+    if (!this.isDevOtpAccepted(code)) {
+      const otp = await this.authRepository.findLatestOtp(
+        normalized,
+        OtpPurpose.LINK_ACCOUNT,
+      );
+
+      if (!otp) {
+        throw new UnauthorizedException('OTP expired or not found');
+      }
+
+      const valid = await verifyOtp(code, otp.codeHash);
+      if (!valid) {
+        throw new UnauthorizedException('Invalid OTP');
+      }
+
+      await this.authRepository.deleteOtp(otp.id);
     }
-
-    const valid = await verifyOtp(code, otp.codeHash);
-    if (!valid) {
-      throw new UnauthorizedException('Invalid OTP');
-    }
-
-    await this.authRepository.deleteOtp(otp.id);
 
     const existing = await this.authRepository.findAuthAccount(
       AuthProvider.PHONE,
@@ -235,6 +242,20 @@ export class AuthService {
     }
 
     return this.issueTokens(account!.user.id);
+  }
+
+  /** Dev-only fixed OTP — disabled in production even if env is set. */
+  private getDevOtpCode(): string | undefined {
+    if (this.config.get('app.nodeEnv') !== 'development') {
+      return undefined;
+    }
+    const code = this.config.get<string>('app.devOtpCode')?.trim();
+    return code && /^\d{4,8}$/.test(code) ? code : undefined;
+  }
+
+  private isDevOtpAccepted(code: string): boolean {
+    const devOtpCode = this.getDevOtpCode();
+    return !!devOtpCode && code === devOtpCode;
   }
 
   private async issueTokens(userId: string, replaceRefreshTokenId?: string) {

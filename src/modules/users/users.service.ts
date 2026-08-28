@@ -13,4 +13,11 @@ export class UsersService {
     }
     return user;
   }
+
+  updateProfile(
+    id: string,
+    data: { name?: string; bio?: string; avatar?: string },
+  ) {
+    return this.usersRepository.updateProfile(id, data);
+  }
 }

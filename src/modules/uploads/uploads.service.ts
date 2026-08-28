@@ -1,21 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
+import { S3Service } from '../../shared/s3/s3.service';
 
 @Injectable()
 export class UploadsService {
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly s3: S3Service) {}
 
   getPresignedUploadUrl(filename: string, contentType: string) {
     const key = `uploads/${randomUUID()}-${filename}`;
-    const bucket = this.config.get<string>('AWS_S3_BUCKET') ?? 'dii-uploads';
-
-    // TODO: Integrate AWS S3 presigned URL
-    return {
-      uploadUrl: `https://${bucket}.s3.amazonaws.com/${key}`,
-      key,
-      contentType,
-      expiresIn: 3600,
-    };
+    return this.s3.getPresignedUploadUrl(key, contentType);
   }
 }

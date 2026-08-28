@@ -329,6 +329,67 @@ model CoupleMember {
   @@map("couple_members")
 }
 
+// ─── Vietnam administrative divisions (2-level: Tỉnh/TP → Phường/Xã) ─────────
+
+enum ProvinceType {
+  PROVINCE /// Tỉnh
+  CITY /// Thành phố trực thuộc trung ương
+}
+
+enum WardType {
+  WARD /// Phường
+  COMMUNE /// Xã
+  SPECIAL /// Đặc khu / đơn vị đặc thù
+}
+
+model Province {
+  id        String       @id @default(cuid())
+  /// Mã hành chính (VD: 01, 79)
+  code      String       @unique
+  name      String
+  nameEn    String?      @map("name_en")
+  type      ProvinceType @default(PROVINCE)
+  slug      String       @unique
+  latitude  Float?
+  longitude Float?
+  sortOrder Int          @default(0) @map("sort_order")
+  isActive  Boolean      @default(true) @map("is_active")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  wards  Ward[]
+  places Place[]
+
+  @@index([isActive, sortOrder])
+  @@index([name])
+  @@map("provinces")
+}
+
+model Ward {
+  id         String   @id @default(cuid())
+  /// Mã hành chính phường/xã
+  code       String   @unique
+  name       String
+  nameEn     String?  @map("name_en")
+  type       WardType @default(WARD)
+  slug       String
+  provinceId String   @map("province_id")
+  latitude   Float?
+  longitude  Float?
+  sortOrder  Int      @default(0) @map("sort_order")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  province Province @relation(fields: [provinceId], references: [id], onDelete: Cascade)
+  places   Place[]
+
+  @@unique([provinceId, slug])
+  @@index([provinceId, isActive, sortOrder])
+  @@index([name])
+  @@map("wards")
+}
+
 // ─── Places & Planning ───────────────────────────────────────────────────────
 
 model Place {
@@ -336,6 +397,8 @@ model Place {
   googlePlaceId String?  @unique @map("google_place_id")
   name          String
   address       String?
+  provinceId    String?  @map("province_id")
+  wardId        String?  @map("ward_id")
   latitude      Float?
   longitude     Float?
   rating        Float?
@@ -349,6 +412,8 @@ model Place {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  province  Province?  @relation(fields: [provinceId], references: [id], onDelete: SetNull)
+  ward      Ward?      @relation(fields: [wardId], references: [id], onDelete: SetNull)
   datePlans DatePlan[]
   memories  Memory[]
   favorites Favorite[]
@@ -356,6 +421,8 @@ model Place {
 
   @@index([category])
   @@index([rating])
+  @@index([provinceId])
+  @@index([wardId])
   @@map("places")
 }
 
