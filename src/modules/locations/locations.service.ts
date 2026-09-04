@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { NotFoundException } from '../../common/exceptions';
 import { MapboxService } from '../../shared/mapbox/mapbox.service';
 import { CreateLocationDto } from './dto/create-location.dto';
 import { LocationsRepository } from './locations.repository';
@@ -10,12 +11,14 @@ export class LocationsService {
     private readonly mapboxService: MapboxService,
   ) {}
 
-  findAll() {
-    return this.locationsRepository.findAll();
+  findAll(limit?: number) {
+    return this.locationsRepository.findAll(limit);
   }
 
-  findById(id: string) {
-    return this.locationsRepository.findById(id);
+  async findById(id: string) {
+    const place = await this.locationsRepository.findById(id);
+    if (!place) throw new NotFoundException('Place not found');
+    return place;
   }
 
   create(dto: CreateLocationDto) {

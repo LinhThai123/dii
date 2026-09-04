@@ -46,11 +46,12 @@ async function bootstrap() {
   SwaggerModule.setup('docs/admin', app, adminDoc);
 
   const port = config.get<number>('app.port') ?? 3001;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
   console.log(`Mobile API: http://localhost:${port}/${MOBILE_API_PREFIX}`);
   console.log(`Admin API:  http://localhost:${port}/${ADMIN_API_PREFIX}`);
   console.log(`Swagger:    http://localhost:${port}/docs/mobile`);
+  console.log(`LAN bind:   http://0.0.0.0:${port}`);
 }
 
 bootstrap();

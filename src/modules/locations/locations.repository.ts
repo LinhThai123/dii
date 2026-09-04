@@ -6,8 +6,14 @@ import { CreateLocationDto } from './dto/create-location.dto';
 export class LocationsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
-    return this.prisma.place.findMany({ orderBy: { name: 'asc' } });
+  findAll(limit?: number) {
+    const take =
+      limit != null ? Math.min(Math.max(Math.trunc(limit), 1), 50) : undefined;
+
+    return this.prisma.place.findMany({
+      orderBy: [{ rating: { sort: 'desc', nulls: 'last' } }, { name: 'asc' }],
+      ...(take != null ? { take } : {}),
+    });
   }
 
   findById(id: string) {
